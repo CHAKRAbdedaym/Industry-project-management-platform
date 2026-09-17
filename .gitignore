@@ -20,6 +20,9 @@ build/
 .DS_Store
 Thumbs.db
 
+# Claude Code local state (worktrees, etc.)
+.claude/
+
 # Environment / secrets
 .env
 *.env.local
