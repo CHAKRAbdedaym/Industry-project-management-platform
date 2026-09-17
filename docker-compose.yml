@@ -1,20 +1,97 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: auth-service-postgres
+    container_name: ipmp-postgres
     environment:
-      POSTGRES_DB: auth_service
-      POSTGRES_USER: auth_service
-      POSTGRES_PASSWORD: auth_service
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
     ports:
       - "5433:5432"
     volumes:
-      - auth-postgres-data:/var/lib/postgresql/data
+      - ipmp-postgres-data:/var/lib/postgresql/data
+      - ./db/init-multi-db.sql:/docker-entrypoint-initdb.d/init-multi-db.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U auth_service -d auth_service"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+
+  auth-service:
+    build: ./auth-service
+    container_name: ipmp-auth-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/auth_service
+      DB_USERNAME: auth_service
+      DB_PASSWORD: auth_service
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  project-service:
+    build: ./project-service
+    container_name: ipmp-project-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/project_service
+      DB_USERNAME: project_service
+      DB_PASSWORD: project_service
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  task-service:
+    build: ./task-service
+    container_name: ipmp-task-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/task_service
+      DB_USERNAME: task_service
+      DB_PASSWORD: task_service
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  notification-service:
+    build: ./notification-service
+    container_name: ipmp-notification-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/notification_service
+      DB_USERNAME: notification_service
+      DB_PASSWORD: notification_service
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: ipmp-api-gateway
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:8081
+      PROJECT_SERVICE_URL: http://project-service:8082
+      TASK_SERVICE_URL: http://task-service:8083
+      NOTIFICATION_SERVICE_URL: http://notification-service:8084
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - project-service
+      - task-service
+      - notification-service
+
+  frontend:
+    build: ./frontend
+    container_name: ipmp-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - api-gateway
 
 volumes:
-  auth-postgres-data:
+  ipmp-postgres-data:
