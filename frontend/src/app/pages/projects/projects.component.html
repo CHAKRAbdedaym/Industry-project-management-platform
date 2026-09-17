@@ -1,0 +1,37 @@
+<h1>Projects</h1>
+
+<div class="card">
+  <h2>New project</h2>
+  <form [formGroup]="form" (ngSubmit)="createProject()">
+    <div class="form-group">
+      <label for="name">Name</label>
+      <input id="name" type="text" formControlName="name" />
+    </div>
+    <div class="form-group">
+      <label for="description">Description</label>
+      <textarea id="description" rows="2" formControlName="description"></textarea>
+    </div>
+    <button type="submit" [disabled]="form.invalid || creating">
+      {{ creating ? 'Creating...' : 'Create project' }}
+    </button>
+  </form>
+</div>
+
+<p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
+<p class="muted" *ngIf="loading">Loading projects...</p>
+<p class="muted" *ngIf="!loading && projects.length === 0">No projects yet — create one above.</p>
+
+<div class="card" *ngFor="let project of projects">
+  <div class="row">
+    <div>
+      <h2>
+        <a [routerLink]="['/projects', project.id]">{{ project.name }}</a>
+      </h2>
+      <p class="muted">{{ project.description || 'No description' }}</p>
+      <span class="badge">{{ project.status }}</span>
+    </div>
+    <div class="actions">
+      <button type="button" class="danger" (click)="deleteProject(project.id)">Delete</button>
+    </div>
+  </div>
+</div>

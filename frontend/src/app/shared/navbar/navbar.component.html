@@ -1,0 +1,13 @@
+<nav class="navbar">
+  <a class="brand" routerLink="/projects">Industry PM Platform</a>
+  <div class="links" *ngIf="auth.isLoggedIn()">
+    <a routerLink="/projects">Projects</a>
+    <a routerLink="/notifications">Notifications</a>
+    <span class="user">{{ auth.currentUserEmail() }}</span>
+    <button type="button" (click)="logout()">Log out</button>
+  </div>
+  <div class="links" *ngIf="!auth.isLoggedIn()">
+    <a routerLink="/login">Log in</a>
+    <a routerLink="/register">Register</a>
+  </div>
+</nav>
