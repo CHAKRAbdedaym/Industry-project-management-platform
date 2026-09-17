@@ -1,0 +1,38 @@
+<h1>Notifications</h1>
+
+<div class="card">
+  <h2>Send a notification (demo)</h2>
+  <form [formGroup]="form" (ngSubmit)="send()">
+    <div class="form-group">
+      <label for="recipientEmail">Recipient email</label>
+      <input id="recipientEmail" type="email" formControlName="recipientEmail" />
+    </div>
+    <div class="form-group">
+      <label for="message">Message</label>
+      <textarea id="message" rows="2" formControlName="message"></textarea>
+    </div>
+    <button type="submit" [disabled]="form.invalid || sending">
+      {{ sending ? 'Sending...' : 'Send' }}
+    </button>
+    <p class="muted" *ngIf="sentMessage">{{ sentMessage }}</p>
+  </form>
+</div>
+
+<p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
+<p class="muted" *ngIf="loading">Loading notifications...</p>
+<p class="muted" *ngIf="!loading && notifications.length === 0">No notifications yet.</p>
+
+<div class="card" *ngFor="let notification of notifications">
+  <div class="row">
+    <div>
+      <p>{{ notification.message }}</p>
+      <span class="badge" *ngIf="!notification.read">Unread</span>
+      <span class="muted" *ngIf="notification.read">Read</span>
+    </div>
+    <div class="actions">
+      <button type="button" class="secondary" *ngIf="!notification.read" (click)="markRead(notification)">
+        Mark read
+      </button>
+    </div>
+  </div>
+</div>

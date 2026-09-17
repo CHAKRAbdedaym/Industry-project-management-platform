@@ -1,0 +1,51 @@
+<p><a routerLink="/projects">&larr; Back to projects</a></p>
+
+<ng-container *ngIf="project">
+  <h1>{{ project.name }}</h1>
+  <p class="muted">{{ project.description || 'No description' }}</p>
+  <span class="badge">{{ project.status }}</span>
+</ng-container>
+
+<p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
+<p class="muted" *ngIf="loading">Loading...</p>
+
+<div class="card" style="margin-top: 1.5rem">
+  <h2>New task</h2>
+  <form [formGroup]="form" (ngSubmit)="createTask()">
+    <div class="form-group">
+      <label for="title">Title</label>
+      <input id="title" type="text" formControlName="title" />
+    </div>
+    <div class="form-group">
+      <label for="description">Description</label>
+      <textarea id="description" rows="2" formControlName="description"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="assigneeEmail">Assignee email (optional)</label>
+      <input id="assigneeEmail" type="email" formControlName="assigneeEmail" />
+    </div>
+    <button type="submit" [disabled]="form.invalid || creating">
+      {{ creating ? 'Creating...' : 'Create task' }}
+    </button>
+  </form>
+</div>
+
+<h2 style="margin-top: 1.5rem">Tasks</h2>
+<p class="muted" *ngIf="tasks.length === 0">No tasks yet.</p>
+
+<div class="card" *ngFor="let task of tasks">
+  <div class="row">
+    <div>
+      <h2>{{ task.title }}</h2>
+      <p class="muted">{{ task.description || 'No description' }}</p>
+      <p class="muted" *ngIf="task.assigneeEmail">Assigned to {{ task.assigneeEmail }}</p>
+      <p class="muted">Created by {{ task.creatorEmail }}</p>
+    </div>
+    <div class="actions">
+      <select [ngModel]="task.status" [ngModelOptions]="{ standalone: true }" (ngModelChange)="updateStatus(task, $event)">
+        <option *ngFor="let status of statuses" [value]="status">{{ status }}</option>
+      </select>
+      <button type="button" class="danger" (click)="deleteTask(task.id)">Delete</button>
+    </div>
+  </div>
+</div>
