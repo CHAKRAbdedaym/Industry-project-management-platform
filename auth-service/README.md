@@ -25,7 +25,7 @@ Configuration is environment-driven (see `src/main/resources/application.yml`):
 
 | Variable                | Default                                          | Purpose                         |
 |--------------------------|---------------------------------------------------|----------------------------------|
-| `DB_URL`                | `jdbc:postgresql://localhost:5432/auth_service`    | Postgres JDBC URL                |
+| `DB_URL`                | `jdbc:postgresql://localhost:5433/auth_service`    | Postgres JDBC URL (5433 is the host port mapped in docker-compose.yml, to avoid clashing with a locally-installed Postgres on 5432) |
 | `DB_USERNAME`            | `auth_service`                                     | Postgres user                    |
 | `DB_PASSWORD`            | `auth_service`                                     | Postgres password                |
 | `JWT_SECRET`             | dev-only default, **override in real deployments** | HMAC signing key for JWTs         |
