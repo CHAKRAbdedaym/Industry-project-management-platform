@@ -1,0 +1,32 @@
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+
+# Gradle (future services)
+.gradle/
+build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+*.env.local
+
+# Logs
+*.log
+
+# Node / Angular (future frontend)
+node_modules/
+dist/

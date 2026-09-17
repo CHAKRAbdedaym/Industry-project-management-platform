@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: auth-service-postgres
+    environment:
+      POSTGRES_DB: auth_service
+      POSTGRES_USER: auth_service
+      POSTGRES_PASSWORD: auth_service
+    ports:
+      - "5433:5432"
+    volumes:
+      - auth-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_service -d auth_service"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  auth-postgres-data:
