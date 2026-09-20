@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: industry-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # Demo/portfolio sizing. Increase if you load real data.
+      storage: 2Gi
+  # No storageClassName set: uses the cluster's default StorageClass.
+  # On EKS this requires the aws-ebs-csi-driver add-on (enabled by default on most
+  # managed EKS clusters). If `kubectl get storageclass` shows no default, either
+  # enable that add-on or set storageClassName explicitly here.
+---
+# Mirrors db/init-multi-db.sql exactly (same file already committed in this repo for
+# docker-compose). Runs once, only when the postgres-pvc volume is first initialized —
+# identical semantics to docker-compose's ./db/init-multi-db.sql bind mount.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: industry-platform
+data:
+  init-multi-db.sql: |
+    CREATE USER auth_service WITH PASSWORD 'auth_service';
+    CREATE DATABASE auth_service OWNER auth_service;
+
+    CREATE USER project_service WITH PASSWORD 'project_service';
+    CREATE DATABASE project_service OWNER project_service;
+
+    CREATE USER task_service WITH PASSWORD 'task_service';
+    CREATE DATABASE task_service OWNER task_service;
+
+    CREATE USER notification_service WITH PASSWORD 'notification_service';
+    CREATE DATABASE notification_service OWNER notification_service;
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: industry-platform
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  # ReadWriteOnce PVCs can only be mounted by one pod at a time on EKS (EBS-backed) -
+  # Recreate avoids a RollingUpdate ever trying to start a second pod against the same
+  # volume before the first one terminates.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: industry-platform-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: industry-platform-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: "postgres"
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+              # subPath avoids postgres refusing to start over a non-empty mount root
+              # (e.g. lost+found) that some CSI volumes create.
+              subPath: pgdata
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+        - name: init-scripts
+          configMap:
+            name: postgres-init-scripts
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: industry-platform
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
