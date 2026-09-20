@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: project-service
+  namespace: industry-platform
+  labels:
+    app: project-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: project-service
+  template:
+    metadata:
+      labels:
+        app: project-service
+    spec:
+      restartPolicy: Always
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - until pg_isready -h postgres -p 5432 -U postgres; do echo "waiting for postgres..."; sleep 2; done
+      containers:
+        - name: project-service
+          image: abdedaym/project-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8082
+          env:
+            - name: DB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: industry-platform-config
+                  key: PROJECT_DB_URL
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: industry-platform-secrets
+                  key: PROJECT_DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: industry-platform-secrets
+                  key: PROJECT_DB_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: industry-platform-secrets
+                  key: JWT_SECRET
+          # No Spring Actuator on this service - TCP check on the app port (see
+          # auth-service.yaml for the rationale).
+          readinessProbe:
+            tcpSocket:
+              port: 8082
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: 8082
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "320Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: project-service
+  namespace: industry-platform
+  labels:
+    app: project-service
+spec:
+  type: ClusterIP
+  selector:
+    app: project-service
+  ports:
+    - port: 8082
+      targetPort: 8082

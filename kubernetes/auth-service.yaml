@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: industry-platform
+  labels:
+    app: auth-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      restartPolicy: Always
+      # Avoids a Docker-Compose-style startup-order dependency: instead of letting the
+      # JVM crash-loop while Postgres is still starting, wait for it here first.
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - until pg_isready -h postgres -p 5432 -U postgres; do echo "waiting for postgres..."; sleep 2; done
+      containers:
+        - name: auth-service
+          image: abdedaym/auth-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8081
+          env:
+            - name: DB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: industry-platform-config
+                  key: AUTH_DB_URL
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: industry-platform-secrets
+                  key: AUTH_DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: industry-platform-secrets
+                  key: AUTH_DB_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: industry-platform-secrets
+                  key: JWT_SECRET
+            - name: JWT_EXPIRATION_MINUTES
+              valueFrom:
+                configMapKeyRef:
+                  name: industry-platform-config
+                  key: JWT_EXPIRATION_MINUTES
+          # No Spring Actuator on this service (not a pom.xml dependency) - a TCP check
+          # on the app port is a safe proxy: Tomcat only binds it once Flyway migrations
+          # and the full Spring context have finished starting.
+          readinessProbe:
+            tcpSocket:
+              port: 8081
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: 8081
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "320Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: industry-platform
+  labels:
+    app: auth-service
+spec:
+  type: ClusterIP
+  selector:
+    app: auth-service
+  ports:
+    - port: 8081
+      targetPort: 8081

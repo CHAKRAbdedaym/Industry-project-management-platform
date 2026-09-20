@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: industry-platform
+  labels:
+    app: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      restartPolicy: Always
+      # No env vars: the Angular production build (nginx/Dockerfile) calls a relative
+      # "/api" path baked in at build time, and nginx.conf server-side proxies that to
+      # http://api-gateway:8080/api/ - which resolves via Kubernetes DNS to the
+      # api-gateway Service below, unchanged from its docker-compose value.
+      containers:
+        - name: frontend
+          image: abdedaym/frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: industry-platform
+  labels:
+    app: frontend
+spec:
+  # Primary public entry point: this is what a browser loads. Its nginx proxies
+  # /api/* to the api-gateway ClusterIP-resolvable Service internally.
+  type: LoadBalancer
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80

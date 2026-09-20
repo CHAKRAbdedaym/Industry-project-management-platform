@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: industry-platform-config
+  namespace: industry-platform
+data:
+  # Per-service Postgres JDBC URLs. "postgres" is the Kubernetes Service name defined
+  # in postgres.yaml, resolved via cluster DNS (same pattern as the "postgres" hostname
+  # already used in docker-compose.yml). Database names match db/init-multi-db.sql.
+  AUTH_DB_URL: "jdbc:postgresql://postgres:5432/auth_service"
+  PROJECT_DB_URL: "jdbc:postgresql://postgres:5432/project_service"
+  TASK_DB_URL: "jdbc:postgresql://postgres:5432/task_service"
+  NOTIFICATION_DB_URL: "jdbc:postgresql://postgres:5432/notification_service"
+
+  # api-gateway routing targets (api-gateway/src/main/resources/application.yml).
+  # These are Kubernetes Service DNS names/ports, identical in shape to the
+  # docker-compose.yml values (http://<service-name>:<port>).
+  AUTH_SERVICE_URL: "http://auth-service:8081"
+  PROJECT_SERVICE_URL: "http://project-service:8082"
+  TASK_SERVICE_URL: "http://task-service:8083"
+  NOTIFICATION_SERVICE_URL: "http://notification-service:8084"
+
+  # auth-service JWT access-token lifetime (matches the application.yml default).
+  JWT_EXPIRATION_MINUTES: "60"
