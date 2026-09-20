@@ -203,3 +203,4 @@ kubectl rollout status deployment -n industry-platform auth-service
 - No AWS Load Balancer Controller assumed — plain `type: LoadBalancer` Services, which work with EKS's in-tree provider out of the box.
 - Single-instance Postgres is acceptable for this demo/portfolio deployment (no HA/replication) — matches the existing docker-compose setup exactly.
 - `replicas: 1` everywhere, per your instructions, since this is a demo/portfolio environment, not a production HA setup.
+# test1
