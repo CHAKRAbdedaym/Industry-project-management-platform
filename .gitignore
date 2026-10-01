@@ -33,3 +33,6 @@ Thumbs.db
 # Node / Angular (future frontend)
 node_modules/
 dist/
+
+# LibreOffice lock files
+.~lock.*#
