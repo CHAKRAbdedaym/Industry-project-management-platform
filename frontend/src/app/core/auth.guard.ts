@@ -2,14 +2,18 @@ import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from './auth.service';
 
-export const authGuard: CanActivateFn = () => {
+/** Protects app pages; remembers where the user was heading so login can send them back. */
+export const authGuard: CanActivateFn = (_route, state) => {
   const auth = inject(AuthService);
-  const router = inject(Router);
-
   if (auth.isLoggedIn()) {
     return true;
   }
+  auth.logout();
+  return inject(Router).createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
+};
 
-  router.navigate(['/login']);
-  return false;
+/** Keeps signed-in users away from the login and register screens. */
+export const guestGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  return auth.isLoggedIn() ? inject(Router).createUrlTree(['/dashboard']) : true;
 };
