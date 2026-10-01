@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
@@ -8,7 +8,7 @@ import { CreateProjectRequest, Project, UpdateProjectRequest } from './models/pr
 export class ProjectService {
   private readonly base = `${environment.apiBaseUrl}/projects`;
 
-  constructor(private http: HttpClient) {}
+  private http = inject(HttpClient);
 
   list(): Observable<Project[]> {
     return this.http.get<Project[]>(this.base);

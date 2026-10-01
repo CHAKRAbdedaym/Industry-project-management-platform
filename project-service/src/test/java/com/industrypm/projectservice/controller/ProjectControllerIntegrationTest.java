@@ -152,13 +152,13 @@ class ProjectControllerIntegrationTest {
     }
 
     @Test
-    void requestsWithoutAuthorizationHeader_areForbidden() throws Exception {
-        mockMvc.perform(get("/api/projects")).andExpect(status().isForbidden());
+    void requestsWithoutAuthorizationHeader_areUnauthorized() throws Exception {
+        mockMvc.perform(get("/api/projects")).andExpect(status().isUnauthorized());
 
         CreateProjectRequest createRequest = new CreateProjectRequest("No Auth", "No auth project");
         mockMvc.perform(post("/api/projects")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createRequest)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 }

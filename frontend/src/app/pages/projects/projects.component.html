@@ -1,37 +1,154 @@
-<h1>Projects</h1>
-
-<div class="card">
-  <h2>New project</h2>
-  <form [formGroup]="form" (ngSubmit)="createProject()">
-    <div class="form-group">
-      <label for="name">Name</label>
-      <input id="name" type="text" formControlName="name" />
-    </div>
-    <div class="form-group">
-      <label for="description">Description</label>
-      <textarea id="description" rows="2" formControlName="description"></textarea>
-    </div>
-    <button type="submit" [disabled]="form.invalid || creating">
-      {{ creating ? 'Creating...' : 'Create project' }}
-    </button>
-  </form>
-</div>
-
-<p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
-<p class="muted" *ngIf="loading">Loading projects...</p>
-<p class="muted" *ngIf="!loading && projects.length === 0">No projects yet — create one above.</p>
-
-<div class="card" *ngFor="let project of projects">
-  <div class="row">
+<div class="page">
+  <header class="page-header">
     <div>
-      <h2>
-        <a [routerLink]="['/projects', project.id]">{{ project.name }}</a>
-      </h2>
-      <p class="muted">{{ project.description || 'No description' }}</p>
-      <span class="badge">{{ project.status }}</span>
+      <h1>Projects</h1>
+      <p class="subtitle">Everything you own, with live progress from the task board.</p>
     </div>
-    <div class="actions">
-      <button type="button" class="danger" (click)="deleteProject(project.id)">Delete</button>
+    <button type="button" class="btn btn-primary" (click)="creating.set(true)">
+      <app-icon name="plus" [size]="16" /> New project
+    </button>
+  </header>
+
+  <div class="toolbar">
+    <div class="input-icon search">
+      <app-icon name="search" [size]="16" />
+      <input
+        class="input"
+        type="search"
+        placeholder="Search projects…"
+        aria-label="Search projects"
+        [ngModel]="search()"
+        (ngModelChange)="search.set($event)"
+      />
     </div>
+    <div class="segmented" role="tablist" aria-label="Filter by status">
+      <button type="button" role="tab" [class.active]="statusFilter() === 'ALL'" (click)="statusFilter.set('ALL')">
+        All <span class="count">{{ counts()['ALL'] }}</span>
+      </button>
+      @for (status of statuses; track status) {
+        <button type="button" role="tab" [class.active]="statusFilter() === status" (click)="statusFilter.set(status)">
+          {{ labels[status] }} <span class="count">{{ counts()[status] }}</span>
+        </button>
+      }
+    </div>
+    <span class="spacer"></span>
+    <select class="select sort" aria-label="Sort projects" [ngModel]="sort()" (ngModelChange)="sort.set($event)">
+      <option value="updated">Recently updated</option>
+      <option value="name">Name A–Z</option>
+      <option value="progress">Most progress</option>
+    </select>
   </div>
+
+  @if (error()) {
+    <div class="alert alert-error" role="alert">
+      <app-icon name="alert" [size]="16" /> <span class="spacer">{{ error() }}</span>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="load()">Retry</button>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="grid-cards">
+      @for (i of [1, 2, 3, 4, 5, 6]; track i) {
+        <div class="card project-card">
+          <div class="skeleton" style="height: 18px; width: 60%"></div>
+          <div class="skeleton" style="height: 12px; width: 90%; margin-top: 14px"></div>
+          <div class="skeleton" style="height: 12px; width: 70%; margin-top: 8px"></div>
+          <div class="skeleton" style="height: 6px; margin-top: 28px"></div>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="grid-cards">
+      @for (card of cards(); track card.project.id) {
+        <a class="card project-card" [routerLink]="['/projects', card.project.id]">
+          <div class="card-top">
+            <span class="project-icon" [class]="'project-icon ' + card.project.status"><app-icon name="folder" [size]="18" /></span>
+            <div class="title-block">
+              <h3 class="truncate">{{ card.project.name }}</h3>
+              <span class="badge" [class]="'badge badge-' + card.project.status.toLowerCase()">
+                <span class="dot"></span>{{ labels[card.project.status] }}
+              </span>
+            </div>
+            <div class="menu-anchor">
+              <button
+                type="button"
+                class="btn btn-ghost btn-icon btn-sm"
+                (click)="toggleMenu(card.project.id, $event)"
+                aria-label="Project actions"
+                aria-haspopup="menu"
+              >
+                <app-icon name="more" [size]="16" />
+              </button>
+              @if (openMenu() === card.project.id) {
+                <div class="menu" role="menu" (click)="$event.preventDefault(); $event.stopPropagation()">
+                  <button type="button" role="menuitem" (click)="editing.set(card.project); openMenu.set(null)">
+                    <app-icon name="edit" [size]="15" /> Edit details
+                  </button>
+                  @if (card.project.status !== 'COMPLETED') {
+                    <button type="button" role="menuitem" (click)="setStatus(card.project, 'COMPLETED'); openMenu.set(null)">
+                      <app-icon name="check-circle" [size]="15" /> Mark as completed
+                    </button>
+                  }
+                  @if (card.project.status !== 'ACTIVE') {
+                    <button type="button" role="menuitem" (click)="setStatus(card.project, 'ACTIVE'); openMenu.set(null)">
+                      <app-icon name="refresh" [size]="15" /> Reopen
+                    </button>
+                  }
+                  @if (card.project.status !== 'ARCHIVED') {
+                    <button type="button" role="menuitem" (click)="setStatus(card.project, 'ARCHIVED'); openMenu.set(null)">
+                      <app-icon name="archive" [size]="15" /> Archive
+                    </button>
+                  }
+                  <hr />
+                  <button type="button" role="menuitem" class="danger" (click)="remove(card.project); openMenu.set(null)">
+                    <app-icon name="trash" [size]="15" /> Delete
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+
+          <p class="description clamp-2" [class.muted]="!card.project.description">
+            {{ card.project.description || 'No description yet.' }}
+          </p>
+
+          <div class="progress-block">
+            <div class="progress-meta">
+              <span>{{ card.total ? card.done + ' of ' + card.total + ' tasks done' : 'No tasks yet' }}</span>
+              <strong>{{ card.percent }}%</strong>
+            </div>
+            <div class="progress"><span [style.width.%]="card.percent"></span></div>
+          </div>
+
+          <div class="card-foot">
+            <span><app-icon name="clock" [size]="14" /> Updated {{ card.project.updatedAt | timeAgo }}</span>
+            @if (card.inProgress) {
+              <span><span class="status-dot IN_PROGRESS"></span> {{ card.inProgress }} in progress</span>
+            }
+          </div>
+        </a>
+      } @empty {
+        <div class="card empty full">
+          @if (projects().length === 0) {
+            <span class="empty-icon"><app-icon name="folder" /></span>
+            <h3>Create your first project</h3>
+            <p>Projects group related tasks so you can plan work and track progress on a board.</p>
+            <button type="button" class="btn btn-primary" (click)="creating.set(true)"><app-icon name="plus" [size]="16" /> New project</button>
+          } @else {
+            <span class="empty-icon"><app-icon name="search" /></span>
+            <h3>No matching projects</h3>
+            <p>Try a different search term or status filter.</p>
+            <button type="button" class="btn btn-secondary" (click)="search.set(''); statusFilter.set('ALL')">Clear filters</button>
+          }
+        </div>
+      }
+    </div>
+  }
 </div>
+
+@if (creating()) {
+  <app-project-form (saved)="onCreated($event)" (closed)="creating.set(false)" />
+}
+@if (editing(); as project) {
+  <app-project-form [project]="project" (saved)="onEdited($event)" (closed)="editing.set(null)" />
+}

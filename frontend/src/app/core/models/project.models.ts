@@ -20,3 +20,11 @@ export interface UpdateProjectRequest {
   description?: string;
   status: ProjectStatus;
 }
+
+export const PROJECT_STATUSES: ProjectStatus[] = ['ACTIVE', 'COMPLETED', 'ARCHIVED'];
+
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  ACTIVE: 'Active',
+  COMPLETED: 'Completed',
+  ARCHIVED: 'Archived',
+};

@@ -14,6 +14,7 @@ import com.industrypm.taskservice.dto.UpdateTaskRequest;
 import com.industrypm.taskservice.entity.Task;
 import com.industrypm.taskservice.entity.TaskStatus;
 import com.industrypm.taskservice.exception.TaskNotFoundException;
+import com.industrypm.taskservice.notification.TaskNotificationEvent;
 import com.industrypm.taskservice.repository.TaskRepository;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class TaskServiceTest {
@@ -30,11 +32,14 @@ class TaskServiceTest {
     @Mock
     private TaskRepository taskRepository;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private TaskService taskService;
 
     @BeforeEach
     void setUp() {
-        taskService = new TaskService(taskRepository);
+        taskService = new TaskService(taskRepository, eventPublisher);
     }
 
     private Task existingTask(UUID id, String creatorEmail, String assigneeEmail) {
@@ -67,6 +72,18 @@ class TaskServiceTest {
         assertThat(response.creatorEmail()).isEqualTo("alice@example.com");
         assertThat(response.assigneeEmail()).isEqualTo("bob@example.com");
         assertThat(response.status()).isEqualTo("TODO");
+        verify(eventPublisher).publishEvent(new TaskNotificationEvent(
+                "bob@example.com", "alice@example.com assigned you the task \"Write tests\""));
+    }
+
+    @Test
+    void create_doesNotNotify_whenUnassignedOrSelfAssigned() {
+        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        taskService.create("alice@example.com", new CreateTaskRequest(UUID.randomUUID(), "Solo", null, null));
+        taskService.create("alice@example.com", new CreateTaskRequest(UUID.randomUUID(), "Mine", null, "alice@example.com"));
+
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -117,7 +134,7 @@ class TaskServiceTest {
     void update_succeeds_whenCallerIsCreator() {
         UUID id = UUID.randomUUID();
         Task task = existingTask(id, "alice@example.com", "bob@example.com");
-        when(taskRepository.findByIdAndCreatorEmail(id, "alice@example.com")).thenReturn(Optional.of(task));
+        when(taskRepository.findVisibleById(id, "alice@example.com")).thenReturn(Optional.of(task));
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         UpdateTaskRequest request = new UpdateTaskRequest("Updated title", "Updated description", "IN_PROGRESS", "carol@example.com");
@@ -127,16 +144,48 @@ class TaskServiceTest {
         assertThat(response.title()).isEqualTo("Updated title");
         assertThat(response.status()).isEqualTo("IN_PROGRESS");
         assertThat(response.assigneeEmail()).isEqualTo("carol@example.com");
+        verify(eventPublisher).publishEvent(new TaskNotificationEvent(
+                "carol@example.com", "alice@example.com assigned you the task \"Updated title\""));
     }
 
     @Test
-    void update_throws_whenCallerIsNotCreator() {
+    void update_letsAssigneeChangeStatus_andNotifiesCreator() {
         UUID id = UUID.randomUUID();
-        when(taskRepository.findByIdAndCreatorEmail(id, "bob@example.com")).thenReturn(Optional.empty());
+        Task task = existingTask(id, "alice@example.com", "bob@example.com");
+        when(taskRepository.findVisibleById(id, "bob@example.com")).thenReturn(Optional.of(task));
+        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UpdateTaskRequest request = new UpdateTaskRequest("Original title", "Original description", "DONE", "bob@example.com");
+
+        TaskResponse response = taskService.update("bob@example.com", id, request);
+
+        assertThat(response.status()).isEqualTo("DONE");
+        verify(eventPublisher).publishEvent(new TaskNotificationEvent(
+                "alice@example.com", "bob@example.com moved \"Original title\" to Done"));
+    }
+
+    @Test
+    void update_rejectsDetailChanges_whenCallerIsOnlyAssignee() {
+        UUID id = UUID.randomUUID();
+        Task task = existingTask(id, "alice@example.com", "bob@example.com");
+        when(taskRepository.findVisibleById(id, "bob@example.com")).thenReturn(Optional.of(task));
+
+        UpdateTaskRequest request = new UpdateTaskRequest("Hijacked", "Original description", "TODO", "bob@example.com");
+
+        assertThatThrownBy(() -> taskService.update("bob@example.com", id, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Only the task creator");
+        verify(taskRepository, never()).save(any());
+    }
+
+    @Test
+    void update_throws_whenTaskNotVisibleToCaller() {
+        UUID id = UUID.randomUUID();
+        when(taskRepository.findVisibleById(id, "stranger@example.com")).thenReturn(Optional.empty());
 
         UpdateTaskRequest request = new UpdateTaskRequest("Updated title", "Updated description", "IN_PROGRESS", null);
 
-        assertThatThrownBy(() -> taskService.update("bob@example.com", id, request))
+        assertThatThrownBy(() -> taskService.update("stranger@example.com", id, request))
                 .isInstanceOf(TaskNotFoundException.class);
     }
 
@@ -144,7 +193,7 @@ class TaskServiceTest {
     void update_throws_whenStatusInvalid() {
         UUID id = UUID.randomUUID();
         Task task = existingTask(id, "alice@example.com", null);
-        when(taskRepository.findByIdAndCreatorEmail(id, "alice@example.com")).thenReturn(Optional.of(task));
+        when(taskRepository.findVisibleById(id, "alice@example.com")).thenReturn(Optional.of(task));
 
         UpdateTaskRequest request = new UpdateTaskRequest("Updated title", "Updated description", "NOT_A_STATUS", null);
 

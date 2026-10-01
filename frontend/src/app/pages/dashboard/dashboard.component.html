@@ -1,0 +1,178 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="muted text-sm">{{ today }}</p>
+      <h1>{{ greeting() }}, {{ firstName() }}</h1>
+      <p class="subtitle">Here's what's happening across your projects.</p>
+    </div>
+    <button type="button" class="btn btn-primary" (click)="creatingProject.set(true)">
+      <app-icon name="plus" [size]="16" /> New project
+    </button>
+  </header>
+
+  @if (error()) {
+    <div class="alert alert-error" role="alert">
+      <app-icon name="alert" [size]="16" /> <span class="spacer">{{ error() }}</span>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="load()">Retry</button>
+    </div>
+  }
+
+  <section class="stats" aria-label="Key figures">
+    @if (loading()) {
+      @for (i of [1, 2, 3, 4]; track i) {
+        <div class="card stat"><div class="skeleton" style="height: 14px; width: 50%"></div><div class="skeleton" style="height: 30px; width: 35%; margin-top: 14px"></div></div>
+      }
+    } @else {
+      <a class="card stat" routerLink="/projects">
+        <span class="stat-icon"><app-icon name="folder" [size]="18" /></span>
+        <span class="stat-label">Active projects</span>
+        <span class="stat-value">{{ stats().activeProjects }}</span>
+        <span class="stat-foot">{{ stats().totalProjects }} in total</span>
+      </a>
+      <a class="card stat" routerLink="/my-tasks">
+        <span class="stat-icon"><app-icon name="tasks" [size]="18" /></span>
+        <span class="stat-label">Open tasks</span>
+        <span class="stat-value">{{ stats().openTasks }}</span>
+        <span class="stat-foot">{{ stats().inProgress }} in progress</span>
+      </a>
+      <a class="card stat" routerLink="/my-tasks">
+        <span class="stat-icon"><app-icon name="target" [size]="18" /></span>
+        <span class="stat-label">Assigned to me</span>
+        <span class="stat-value">{{ stats().assignedToMe }}</span>
+        <span class="stat-foot">open and waiting on you</span>
+      </a>
+      <div class="card stat">
+        <span class="stat-icon"><app-icon name="check-circle" [size]="18" /></span>
+        <span class="stat-label">Completion rate</span>
+        <span class="stat-value">{{ stats().completion }}<small>%</small></span>
+        <span class="stat-foot">{{ stats().done }} of {{ stats().total }} tasks done</span>
+      </div>
+    }
+  </section>
+
+  <div class="grid">
+    <section class="card span-2">
+      <div class="card-header">
+        <h2>Task status</h2>
+        <span class="muted text-sm">{{ stats().total }} tasks</span>
+      </div>
+      <div class="card-body">
+        @if (loading()) {
+          <div class="skeleton" style="height: 14px"></div>
+        } @else if (stats().total === 0) {
+          <p class="muted">No tasks yet. Open a project and add the first one.</p>
+        } @else {
+          <div class="breakdown" role="img" [attr.aria-label]="'Task status breakdown'">
+            @for (segment of breakdown(); track segment.status) {
+              @if (segment.count > 0) {
+                <span
+                  class="segment"
+                  [class]="'segment ' + segment.status"
+                  [style.flex-grow]="segment.count"
+                  [attr.data-tip]="segment.label + ': ' + segment.count + ' (' + segment.percent + '%)'"
+                ></span>
+              }
+            }
+          </div>
+          <ul class="legend">
+            @for (segment of breakdown(); track segment.status) {
+              <li>
+                <span class="status-dot" [class]="'status-dot ' + segment.status"></span>
+                <span class="legend-label">{{ segment.label }}</span>
+                <strong>{{ segment.count }}</strong>
+                <span class="muted">{{ segment.percent }}%</span>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>Recent activity</h2>
+        <a routerLink="/notifications" class="text-sm">View all</a>
+      </div>
+      <div class="list">
+        @if (loading()) {
+          <div class="card-body"><div class="skeleton" style="height: 40px"></div></div>
+        } @else {
+          @for (n of notifications(); track n.id) {
+            <a class="list-item" routerLink="/notifications">
+              <span class="activity-dot" [class.unread]="!n.read"></span>
+              <span class="list-main">
+                <span class="clamp-2">{{ n.message }}</span>
+                <span class="muted text-xs">{{ n.createdAt | timeAgo }}</span>
+              </span>
+            </a>
+          } @empty {
+            <p class="muted card-body">You're all caught up.</p>
+          }
+        }
+      </div>
+    </section>
+
+    <section class="card span-2">
+      <div class="card-header">
+        <h2>Active projects</h2>
+        <a routerLink="/projects" class="text-sm">All projects</a>
+      </div>
+      <div class="list">
+        @if (loading()) {
+          <div class="card-body"><div class="skeleton" style="height: 40px"></div></div>
+        } @else {
+          @for (item of projectProgress(); track item.project.id) {
+            <a class="list-item project-row" [routerLink]="['/projects', item.project.id]">
+              <span class="project-icon"><app-icon name="folder" [size]="16" /></span>
+              <span class="list-main">
+                <strong class="truncate">{{ item.project.name }}</strong>
+                <span class="muted text-xs">{{ item.done }}/{{ item.total }} tasks done · updated {{ item.project.updatedAt | timeAgo }}</span>
+              </span>
+              <span class="progress-wrap">
+                <span class="progress"><span [style.width.%]="item.percent"></span></span>
+                <span class="text-xs muted percent">{{ item.percent }}%</span>
+              </span>
+            </a>
+          } @empty {
+            <div class="empty">
+              <span class="empty-icon"><app-icon name="folder" /></span>
+              <h3>No active projects</h3>
+              <p>Create a project to start planning work with your team.</p>
+              <button type="button" class="btn btn-primary btn-sm" (click)="creatingProject.set(true)">
+                <app-icon name="plus" [size]="14" /> New project
+              </button>
+            </div>
+          }
+        }
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>Assigned to me</h2>
+        <a routerLink="/my-tasks" class="text-sm">My tasks</a>
+      </div>
+      <div class="list">
+        @if (loading()) {
+          <div class="card-body"><div class="skeleton" style="height: 40px"></div></div>
+        } @else {
+          @for (task of myOpenTasks(); track task.id) {
+            <a class="list-item" [routerLink]="projectNames().has(task.projectId) ? ['/projects', task.projectId] : ['/my-tasks']">
+              <span class="status-dot" [class]="'status-dot ' + task.status"></span>
+              <span class="list-main">
+                <span class="truncate">{{ task.title }}</span>
+                <span class="muted text-xs truncate">{{ projectNames().get(task.projectId) ?? 'Shared project' }} · {{ labels[task.status] }}</span>
+              </span>
+            </a>
+          } @empty {
+            <p class="muted card-body">Nothing assigned to you right now.</p>
+          }
+        }
+      </div>
+    </section>
+  </div>
+</div>
+
+@if (creatingProject()) {
+  <app-project-form (saved)="onProjectCreated($event)" (closed)="creatingProject.set(false)" />
+}

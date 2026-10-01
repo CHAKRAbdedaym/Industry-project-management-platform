@@ -50,6 +50,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/task_service
       DB_USERNAME: task_service
       DB_PASSWORD: task_service
+      NOTIFICATION_SERVICE_URL: http://notification-service:8084
     ports:
       - "8083:8083"
     depends_on:

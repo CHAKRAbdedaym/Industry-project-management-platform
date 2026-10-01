@@ -1,38 +1,100 @@
-<h1>Notifications</h1>
-
-<div class="card">
-  <h2>Send a notification (demo)</h2>
-  <form [formGroup]="form" (ngSubmit)="send()">
-    <div class="form-group">
-      <label for="recipientEmail">Recipient email</label>
-      <input id="recipientEmail" type="email" formControlName="recipientEmail" />
-    </div>
-    <div class="form-group">
-      <label for="message">Message</label>
-      <textarea id="message" rows="2" formControlName="message"></textarea>
-    </div>
-    <button type="submit" [disabled]="form.invalid || sending">
-      {{ sending ? 'Sending...' : 'Send' }}
-    </button>
-    <p class="muted" *ngIf="sentMessage">{{ sentMessage }}</p>
-  </form>
-</div>
-
-<p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
-<p class="muted" *ngIf="loading">Loading notifications...</p>
-<p class="muted" *ngIf="!loading && notifications.length === 0">No notifications yet.</p>
-
-<div class="card" *ngFor="let notification of notifications">
-  <div class="row">
+<div class="page narrow">
+  <header class="page-header">
     <div>
-      <p>{{ notification.message }}</p>
-      <span class="badge" *ngIf="!notification.read">Unread</span>
-      <span class="muted" *ngIf="notification.read">Read</span>
+      <h1>Notifications</h1>
+      <p class="subtitle">
+        @if (unread()) {
+          You have {{ unread() }} unread {{ unread() === 1 ? 'notification' : 'notifications' }}.
+        } @else {
+          You're all caught up.
+        }
+      </p>
     </div>
-    <div class="actions">
-      <button type="button" class="secondary" *ngIf="!notification.read" (click)="markRead(notification)">
-        Mark read
+    <div class="row">
+      <button type="button" class="btn btn-secondary" (click)="markAllRead()" [disabled]="!unread()">
+        <app-icon name="check-all" [size]="16" /> Mark all as read
+      </button>
+      <button type="button" class="btn btn-primary" (click)="openCompose()"><app-icon name="send" [size]="16" /> Send message</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="segmented" role="tablist">
+      <button type="button" role="tab" [class.active]="filter() === 'all'" (click)="filter.set('all')">
+        All <span class="count">{{ notifications().length }}</span>
+      </button>
+      <button type="button" role="tab" [class.active]="filter() === 'unread'" (click)="filter.set('unread')">
+        Unread <span class="count">{{ unread() }}</span>
       </button>
     </div>
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-ghost btn-sm" (click)="load()"><app-icon name="refresh" [size]="14" /> Refresh</button>
+  </div>
+
+  @if (error()) {
+    <div class="alert alert-error" role="alert">
+      <app-icon name="alert" [size]="16" /> <span class="spacer">{{ error() }}</span>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="load()">Retry</button>
+    </div>
+  }
+
+  <div class="card list">
+    @if (loading()) {
+      @for (i of [1, 2, 3]; track i) {
+        <div class="item"><div class="skeleton" style="width: 36px; height: 36px; border-radius: 10px"></div><div class="skeleton" style="height: 14px; flex: 1"></div></div>
+      }
+    } @else {
+      @for (n of visible(); track n.id) {
+        <button type="button" class="item" [class.unread]="!n.read" (click)="markRead(n)" [attr.aria-label]="(n.read ? '' : 'Unread: ') + n.message">
+          <span class="item-icon"><app-icon [name]="iconFor(n)" [size]="17" /></span>
+          <span class="item-body">
+            <span class="message">{{ n.message }}</span>
+            <span class="muted text-xs">{{ n.createdAt | timeAgo }}</span>
+          </span>
+          @if (!n.read) {
+            <span class="unread-dot" title="Unread"></span>
+          }
+        </button>
+      } @empty {
+        <div class="empty">
+          <span class="empty-icon"><app-icon name="inbox" /></span>
+          <h3>{{ filter() === 'unread' ? 'No unread notifications' : 'No notifications yet' }}</h3>
+          <p>You'll be notified here when someone assigns you a task or moves one of yours.</p>
+        </div>
+      }
+    }
   </div>
 </div>
+
+@if (composing()) {
+  <app-modal title="Send a message" subtitle="Drop a teammate a note — it lands in their notifications." (closed)="composing.set(false)">
+    <form [formGroup]="form" (ngSubmit)="send()" novalidate>
+      @if (sendError()) {
+        <div class="alert alert-error" role="alert"><app-icon name="alert" [size]="16" /> {{ sendError() }}</div>
+      }
+      <div class="field">
+        <label for="recipient">To</label>
+        <input id="recipient" class="input" type="email" formControlName="recipientEmail" placeholder="teammate@company.com" />
+        @if (form.controls.recipientEmail.touched && form.controls.recipientEmail.invalid) {
+          <span class="field-error">Enter a valid email.</span>
+        }
+      </div>
+      <div class="field">
+        <label for="message">Message</label>
+        <textarea id="message" class="textarea" rows="4" maxlength="1000" formControlName="message" placeholder="Write your message…"></textarea>
+        <span class="hint">{{ form.controls.message.value.length }}/1000</span>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" (click)="composing.set(false)">Cancel</button>
+        <button type="submit" class="btn btn-primary" [disabled]="sending()">
+          @if (sending()) {
+            <span class="spinner"></span>
+          } @else {
+            <app-icon name="send" [size]="15" />
+          }
+          Send
+        </button>
+      </div>
+    </form>
+  </app-modal>
+}

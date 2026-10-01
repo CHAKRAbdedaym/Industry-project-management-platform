@@ -119,7 +119,7 @@ class NotificationControllerIntegrationTest {
     }
 
     @Test
-    void requestsWithoutAuthorizationHeader_areForbidden() throws Exception {
-        mockMvc.perform(get("/api/notifications/me")).andExpect(status().isForbidden());
+    void requestsWithoutAuthorizationHeader_areUnauthorized() throws Exception {
+        mockMvc.perform(get("/api/notifications/me")).andExpect(status().isUnauthorized());
     }
 }

@@ -1,120 +1,224 @@
-import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { CdkDrag, CdkDragDrop, CdkDragPlaceholder, CdkDropList, CdkDropListGroup } from '@angular/cdk/drag-drop';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { Title } from '@angular/platform-browser';
+import { FormsModule } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
+import { forkJoin } from 'rxjs';
+import { AuthService } from '../../core/auth.service';
+import { ConfirmService } from '../../core/confirm.service';
+import { errorMessage } from '../../core/http-error';
+import { PROJECT_STATUS_LABELS, Project } from '../../core/models/project.models';
+import { TASK_STATUSES, TASK_STATUS_LABELS, Task, TaskStatus } from '../../core/models/task.models';
 import { ProjectService } from '../../core/project.service';
 import { TaskService } from '../../core/task.service';
-import { Project } from '../../core/models/project.models';
-import { Task, TaskStatus } from '../../core/models/task.models';
+import { ToastService } from '../../core/toast.service';
+import { AvatarComponent } from '../../shared/avatar.component';
+import { IconComponent } from '../../shared/icon.component';
+import { ProjectFormComponent } from '../../shared/project-form.component';
+import { TaskFormComponent } from '../../shared/task-form.component';
+import { TimeAgoPipe } from '../../shared/time-ago.pipe';
+
+type Scope = 'all' | 'assigned' | 'created';
 
 @Component({
   selector: 'app-project-detail',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterLink],
+  imports: [
+    FormsModule,
+    RouterLink,
+    CdkDropListGroup,
+    CdkDropList,
+    CdkDrag,
+    CdkDragPlaceholder,
+    IconComponent,
+    AvatarComponent,
+    TimeAgoPipe,
+    TaskFormComponent,
+    ProjectFormComponent,
+  ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './project-detail.component.html',
   styleUrl: './project-detail.component.css',
 })
 export class ProjectDetailComponent implements OnInit {
-  private route = inject(ActivatedRoute);
   private projectService = inject(ProjectService);
   private taskService = inject(TaskService);
-  private fb = inject(FormBuilder);
+  private toast = inject(ToastService);
+  private confirm = inject(ConfirmService);
+  private router = inject(Router);
+  private title = inject(Title);
+  private auth = inject(AuthService);
 
-  projectId = '';
-  project: Project | null = null;
-  tasks: Task[] = [];
-  loading = true;
-  errorMessage: string | null = null;
-  creating = false;
+  /** Route param, bound via withComponentInputBinding. */
+  id = input.required<string>();
 
-  statuses: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'DONE'];
+  readonly statuses = TASK_STATUSES;
+  readonly labels = TASK_STATUS_LABELS;
+  readonly projectLabels = PROJECT_STATUS_LABELS;
 
-  form = this.fb.group({
-    title: ['', [Validators.required, Validators.maxLength(255)]],
-    description: [''],
-    assigneeEmail: ['', [Validators.email]],
+  loading = signal(true);
+  notFound = signal(false);
+  error = signal<string | null>(null);
+  project = signal<Project | null>(null);
+  tasks = signal<Task[]>([]);
+
+  search = signal('');
+  scope = signal<Scope>('all');
+
+  editingProject = signal(false);
+  taskDialog = signal<{ task: Task | null; status: TaskStatus } | null>(null);
+
+  private me = computed(() => this.auth.email());
+
+  /** Set while a card is being dragged so the click fired on release doesn't open the dialog. */
+  dragging = false;
+
+  visibleTasks = computed(() => {
+    const term = this.search().trim().toLowerCase();
+    const scope = this.scope();
+    const me = this.me();
+    return this.tasks().filter(
+      (t) =>
+        (scope === 'all' || (scope === 'assigned' ? t.assigneeEmail === me : t.creatorEmail === me)) &&
+        (!term ||
+          t.title.toLowerCase().includes(term) ||
+          t.description?.toLowerCase().includes(term) ||
+          t.assigneeEmail?.toLowerCase().includes(term)),
+    );
+  });
+
+  columns = computed(() => {
+    const tasks = this.visibleTasks();
+    return TASK_STATUSES.map((status) => ({
+      status,
+      label: TASK_STATUS_LABELS[status],
+      tasks: tasks
+        .filter((t) => t.status === status)
+        .sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt)),
+    }));
+  });
+
+  progress = computed(() => {
+    const tasks = this.tasks();
+    const done = tasks.filter((t) => t.status === 'DONE').length;
+    return { total: tasks.length, done, percent: tasks.length ? Math.round((done / tasks.length) * 100) : 0 };
   });
 
   ngOnInit(): void {
-    this.projectId = this.route.snapshot.paramMap.get('id') ?? '';
     this.load();
   }
 
   load(): void {
-    this.loading = true;
-    this.projectService.get(this.projectId).subscribe({
-      next: (project) => {
-        this.project = project;
-        this.loading = false;
+    this.loading.set(true);
+    this.error.set(null);
+    forkJoin({
+      project: this.projectService.get(this.id()),
+      tasks: this.taskService.listByProject(this.id()),
+    }).subscribe({
+      next: ({ project, tasks }) => {
+        this.project.set(project);
+        this.tasks.set(tasks);
+        this.title.setTitle(`${project.name} · IndustryPM`);
+        this.loading.set(false);
       },
       error: (err) => {
-        this.errorMessage = err.error?.message ?? 'Failed to load project.';
-        this.loading = false;
-      },
-    });
-
-    this.taskService.listByProject(this.projectId).subscribe({
-      next: (tasks) => (this.tasks = tasks),
-      error: (err) => {
-        this.errorMessage = err.error?.message ?? 'Failed to load tasks.';
+        if (err instanceof HttpErrorResponse && (err.status === 404 || err.status === 400)) {
+          this.notFound.set(true);
+        } else {
+          this.error.set(errorMessage(err, 'Could not load this project.'));
+        }
+        this.loading.set(false);
       },
     });
   }
 
-  createTask(): void {
-    if (this.form.invalid) {
+  drop(event: CdkDragDrop<TaskStatus, TaskStatus, Task>): void {
+    const task = event.item.data;
+    const status = event.container.data;
+    if (event.previousContainer === event.container || task.status === status) {
       return;
     }
 
-    this.creating = true;
-    const raw = this.form.getRawValue();
+    // Optimistic move; roll back if task-service refuses.
+    const previous = task;
+    this.replace({ ...task, status, updatedAt: new Date().toISOString() });
 
-    this.taskService
-      .create({
-        projectId: this.projectId,
-        title: raw.title as string,
-        description: raw.description || undefined,
-        assigneeEmail: raw.assigneeEmail || undefined,
-      })
-      .subscribe({
-        next: (task) => {
-          this.tasks = [task, ...this.tasks];
-          this.form.reset();
-          this.creating = false;
-        },
-        error: (err) => {
-          this.errorMessage = err.error?.message ?? 'Failed to create task.';
-          this.creating = false;
-        },
-      });
-  }
-
-  updateStatus(task: Task, status: TaskStatus): void {
     this.taskService
       .update(task.id, {
         title: task.title,
         description: task.description ?? undefined,
-        status,
         assigneeEmail: task.assigneeEmail ?? undefined,
+        status,
       })
       .subscribe({
-        next: (updated) => {
-          this.tasks = this.tasks.map((t) => (t.id === updated.id ? updated : t));
-        },
+        next: (updated) => this.replace(updated),
         error: (err) => {
-          this.errorMessage = err.error?.message ?? 'Failed to update task.';
+          this.replace(previous);
+          this.toast.error(errorMessage(err, 'Could not move the task.'));
         },
       });
   }
 
-  deleteTask(id: string): void {
-    this.taskService.delete(id).subscribe({
-      next: () => {
-        this.tasks = this.tasks.filter((t) => t.id !== id);
-      },
-      error: (err) => {
-        this.errorMessage = err.error?.message ?? 'Failed to delete task.';
-      },
+  openNewTask(status: TaskStatus = 'TODO'): void {
+    this.taskDialog.set({ task: null, status });
+  }
+
+  onDragEnded(): void {
+    setTimeout(() => (this.dragging = false));
+  }
+
+  openTask(task: Task): void {
+    if (this.dragging) {
+      return;
+    }
+    this.taskDialog.set({ task, status: task.status });
+  }
+
+  onTaskSaved(task: Task): void {
+    this.taskDialog.set(null);
+    if (this.tasks().some((t) => t.id === task.id)) {
+      this.replace(task);
+    } else {
+      this.tasks.update((list) => [task, ...list]);
+    }
+  }
+
+  onTaskDeleted(id: string): void {
+    this.taskDialog.set(null);
+    this.tasks.update((list) => list.filter((t) => t.id !== id));
+  }
+
+  onProjectSaved(project: Project): void {
+    this.editingProject.set(false);
+    this.project.set(project);
+    this.title.setTitle(`${project.name} · IndustryPM`);
+  }
+
+  async deleteProject(): Promise<void> {
+    const project = this.project();
+    if (!project) {
+      return;
+    }
+    const confirmed = await this.confirm.confirm({
+      title: 'Delete project?',
+      message: `“${project.name}” will be permanently deleted. This can't be undone.`,
+      confirmLabel: 'Delete project',
+      danger: true,
     });
+    if (!confirmed) {
+      return;
+    }
+    this.projectService.delete(project.id).subscribe({
+      next: () => {
+        this.toast.success('Project deleted');
+        this.router.navigate(['/projects']);
+      },
+      error: (err) => this.toast.error(errorMessage(err, 'Could not delete the project.')),
+    });
+  }
+
+  private replace(task: Task): void {
+    this.tasks.update((list) => list.map((t) => (t.id === task.id ? task : t)));
   }
 }

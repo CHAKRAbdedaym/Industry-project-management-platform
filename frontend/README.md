@@ -5,7 +5,9 @@ Angular dashboard for the Industry Project Management Platform. Lets a user regi
 ## Stack
 
 - Angular 18 (standalone components, functional guards/interceptors, `provideHttpClient`)
-- Plain CSS (no UI framework) for a small, consistent design system (`src/styles.css`)
+- Signals for component state, `OnPush` change detection, lazy-loaded routes
+- `@angular/cdk` drag-and-drop for the Kanban board
+- Plain CSS design system (`src/styles.css`) with design tokens and light/dark themes — no UI framework
 
 ## Running locally
 
@@ -22,7 +24,7 @@ Serves on `http://localhost:4200`. By default the app calls the API at `http://l
 npm test
 ```
 
-Runs unit tests (Jasmine/Karma, headless Chrome) covering `AuthService`'s token handling (login stores a valid JWT, expired tokens are treated as logged-out, logout clears the token) and the root `AppComponent`.
+Runs unit tests (Jasmine/Karma, headless Chrome) covering `AuthService` token handling, the auth interceptor (bearer token attached, no token on login, session ended on 401), the relative-time pipe and the root `AppComponent`.
 
 ## Build
 
@@ -34,10 +36,23 @@ Outputs to `dist/frontend/browser`. In production the app calls a relative `/api
 
 ## Pages
 
-| Route              | Description                                             |
-|---------------------|----------------------------------------------------------|
-| `/login`            | Log in, stores the JWT in `localStorage`                 |
-| `/register`         | Create an account                                        |
-| `/projects`         | List/create/delete your projects (auth required)         |
-| `/projects/:id`     | Project detail: view info, list/create/update/delete its tasks (auth required) |
-| `/notifications`    | View your notifications, send a demo notification to any email, mark as read (auth required) |
+| Route              | Description |
+|--------------------|-------------|
+| `/login`, `/register` | Split-screen auth with inline validation; registering signs you straight in |
+| `/dashboard`       | Key figures, task status breakdown, project progress, tasks assigned to you, recent activity |
+| `/projects`        | Project cards with live progress; search, status filter, sorting, quick actions (edit, complete, archive, delete) |
+| `/projects/:id`    | Kanban board — drag tasks between To do / In progress / Done, filter, add/edit tasks in a dialog |
+| `/my-tasks`        | Tasks assigned to you or created by you across all projects, with inline status change |
+| `/notifications`   | Notifications with unread filter, mark all as read, and sending a message to a teammate |
+
+All app routes require a valid token. A `401` from any service ends the session and returns you to the page you were on after signing in again.
+
+## Structure
+
+```
+src/app/
+  core/      services (auth, projects, tasks, notifications, toast, confirm, theme), guards, interceptor, models
+  shared/    reusable UI: modal, icon, avatar, toasts, confirm dialog, project/task form dialogs, time-ago pipe
+  layout/    authenticated app shell (sidebar, user menu, unread badge)
+  pages/     one folder per route
+```
