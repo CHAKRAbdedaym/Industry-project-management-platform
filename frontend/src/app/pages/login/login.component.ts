@@ -1,45 +1,50 @@
-import { Component, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
+import { errorMessage } from '../../core/http-error';
+import { AuthLayoutComponent } from '../../shared/auth-layout.component';
+import { IconComponent } from '../../shared/icon.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, AuthLayoutComponent, IconComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './login.component.html',
-  styleUrl: './login.component.css',
 })
 export class LoginComponent {
   private fb = inject(FormBuilder);
   private auth = inject(AuthService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
-  form = this.fb.group({
-    email: ['', [Validators.required, Validators.email]],
+  form = this.fb.nonNullable.group({
+    email: [this.route.snapshot.queryParamMap.get('email') ?? '', [Validators.required, Validators.email]],
     password: ['', [Validators.required]],
   });
 
-  loading = false;
-  errorMessage: string | null = null;
+  loading = signal(false);
+  showPassword = signal(false);
+  errorMessage = signal<string | null>(null);
 
   submit(): void {
     if (this.form.invalid) {
+      this.form.markAllAsTouched();
       return;
     }
 
-    this.loading = true;
-    this.errorMessage = null;
+    this.loading.set(true);
+    this.errorMessage.set(null);
 
-    this.auth.login(this.form.getRawValue() as { email: string; password: string }).subscribe({
+    this.auth.login(this.form.getRawValue()).subscribe({
       next: () => {
-        this.loading = false;
-        this.router.navigate(['/projects']);
+        const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+        this.router.navigateByUrl(returnUrl?.startsWith('/') ? returnUrl : '/dashboard');
       },
       error: (err) => {
-        this.loading = false;
-        this.errorMessage = err.error?.message ?? 'Login failed. Please try again.';
+        this.loading.set(false);
+        this.errorMessage.set(errorMessage(err, 'Sign in failed. Please try again.'));
       },
     });
   }
