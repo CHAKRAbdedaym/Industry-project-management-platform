@@ -1,51 +1,168 @@
-<p><a routerLink="/projects">&larr; Back to projects</a></p>
+<div class="page wide">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a routerLink="/projects">Projects</a>
+    <app-icon name="chevron-right" [size]="14" />
+    <span class="truncate">{{ project()?.name ?? '…' }}</span>
+  </nav>
 
-<ng-container *ngIf="project">
-  <h1>{{ project.name }}</h1>
-  <p class="muted">{{ project.description || 'No description' }}</p>
-  <span class="badge">{{ project.status }}</span>
-</ng-container>
+  @if (loading()) {
+    <div class="skeleton" style="height: 32px; width: 320px"></div>
+    <div class="skeleton" style="height: 14px; width: 480px; margin-top: 12px"></div>
+    <div class="board" style="margin-top: 2rem">
+      @for (i of [1, 2, 3]; track i) {
+        <div class="column"><div class="skeleton" style="height: 90px"></div><div class="skeleton" style="height: 90px; margin-top: 10px"></div></div>
+      }
+    </div>
+  } @else if (notFound()) {
+    <div class="card empty">
+      <span class="empty-icon"><app-icon name="folder" /></span>
+      <h3>Project not found</h3>
+      <p>It may have been deleted, or it belongs to someone else.</p>
+      <a class="btn btn-primary" routerLink="/projects"><app-icon name="arrow-left" [size]="16" /> Back to projects</a>
+    </div>
+  } @else if (error()) {
+    <div class="alert alert-error" role="alert">
+      <app-icon name="alert" [size]="16" /> <span class="spacer">{{ error() }}</span>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="load()">Retry</button>
+    </div>
+  } @else {
+  @if (project(); as p) {
+    <header class="project-header">
+      <div class="heading">
+        <div class="title-row">
+          <h1>{{ p.name }}</h1>
+          <span class="badge" [class]="'badge badge-' + p.status.toLowerCase()"><span class="dot"></span>{{ projectLabels[p.status] }}</span>
+        </div>
+        <p class="description" [class.muted]="!p.description">{{ p.description || 'No description yet.' }}</p>
+        <p class="meta muted text-sm">
+          <app-icon name="calendar" [size]="14" /> Created {{ p.createdAt | timeAgo }}
+          <span class="sep">·</span>
+          <app-icon name="clock" [size]="14" /> Updated {{ p.updatedAt | timeAgo }}
+        </p>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="btn btn-secondary" (click)="editingProject.set(true)"><app-icon name="edit" [size]="16" /> Edit</button>
+        <button type="button" class="btn btn-secondary btn-icon danger-hover" (click)="deleteProject()" aria-label="Delete project" title="Delete project">
+          <app-icon name="trash" [size]="16" />
+        </button>
+        <button type="button" class="btn btn-primary" (click)="openNewTask()"><app-icon name="plus" [size]="16" /> Add task</button>
+      </div>
+    </header>
 
-<p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
-<p class="muted" *ngIf="loading">Loading...</p>
+    <section class="card summary" aria-label="Progress">
+      <div class="summary-progress">
+        <div class="progress-meta">
+          <span>Overall progress</span>
+          <strong>{{ progress().percent }}%</strong>
+        </div>
+        <div class="progress"><span [style.width.%]="progress().percent"></span></div>
+      </div>
+      @for (column of columns(); track column.status) {
+        <div class="summary-stat">
+          <span class="status-dot" [class]="'status-dot ' + column.status"></span>
+          <span class="muted">{{ column.label }}</span>
+          <strong>{{ column.tasks.length }}</strong>
+        </div>
+      }
+    </section>
 
-<div class="card" style="margin-top: 1.5rem">
-  <h2>New task</h2>
-  <form [formGroup]="form" (ngSubmit)="createTask()">
-    <div class="form-group">
-      <label for="title">Title</label>
-      <input id="title" type="text" formControlName="title" />
+    <div class="toolbar">
+      <div class="input-icon search">
+        <app-icon name="search" [size]="16" />
+        <input
+          class="input"
+          type="search"
+          placeholder="Filter tasks…"
+          aria-label="Filter tasks"
+          [ngModel]="search()"
+          (ngModelChange)="search.set($event)"
+        />
+      </div>
+      <div class="segmented" role="tablist" aria-label="Show tasks">
+        <button type="button" role="tab" [class.active]="scope() === 'all'" (click)="scope.set('all')">All tasks</button>
+        <button type="button" role="tab" [class.active]="scope() === 'assigned'" (click)="scope.set('assigned')">Assigned to me</button>
+        <button type="button" role="tab" [class.active]="scope() === 'created'" (click)="scope.set('created')">Created by me</button>
+      </div>
+      <span class="spacer"></span>
+      <span class="muted text-sm hint-drag"><app-icon name="grip" [size]="14" /> Drag cards between columns to update status</span>
     </div>
-    <div class="form-group">
-      <label for="description">Description</label>
-      <textarea id="description" rows="2" formControlName="description"></textarea>
+
+    <div class="board" cdkDropListGroup>
+      @for (column of columns(); track column.status) {
+        <section class="column" [attr.aria-label]="column.label">
+          <header class="column-header">
+            <span class="status-dot" [class]="'status-dot ' + column.status"></span>
+            <h3>{{ column.label }}</h3>
+            <span class="column-count">{{ column.tasks.length }}</span>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-ghost btn-icon btn-sm" (click)="openNewTask(column.status)" [attr.aria-label]="'Add task to ' + column.label">
+              <app-icon name="plus" [size]="16" />
+            </button>
+          </header>
+
+          <div
+            class="drop-zone"
+            cdkDropList
+            [cdkDropListData]="column.status"
+            (cdkDropListDropped)="drop($event)"
+          >
+            @for (task of column.tasks; track task.id) {
+              <article
+                class="task-card"
+                [class]="'task-card ' + task.status"
+                cdkDrag
+                [cdkDragData]="task"
+                (cdkDragStarted)="dragging = true"
+                (cdkDragEnded)="onDragEnded()"
+                (click)="openTask(task)"
+                (keydown.enter)="openTask(task)"
+                tabindex="0"
+                [attr.aria-label]="task.title + ', ' + labels[task.status]"
+              >
+                <div class="task-placeholder" *cdkDragPlaceholder></div>
+                <h4>{{ task.title }}</h4>
+                @if (task.description) {
+                  <p class="clamp-2">{{ task.description }}</p>
+                }
+                <footer>
+                  @if (task.assigneeEmail) {
+                    <span class="assignee">
+                      <app-avatar [email]="task.assigneeEmail" [size]="22" />
+                      <span class="truncate">{{ task.assigneeEmail }}</span>
+                    </span>
+                  } @else {
+                    <span class="assignee muted"><app-icon name="user" [size]="14" /> Unassigned</span>
+                  }
+                  <span class="muted when">{{ task.updatedAt | timeAgo }}</span>
+                </footer>
+              </article>
+            } @empty {
+              <button type="button" class="column-empty" (click)="openNewTask(column.status)">
+                @if (search() || scope() !== 'all') {
+                  No matching tasks
+                } @else {
+                  <app-icon name="plus" [size]="16" /> Add a task
+                }
+              </button>
+            }
+          </div>
+        </section>
+      }
     </div>
-    <div class="form-group">
-      <label for="assigneeEmail">Assignee email (optional)</label>
-      <input id="assigneeEmail" type="email" formControlName="assigneeEmail" />
-    </div>
-    <button type="submit" [disabled]="form.invalid || creating">
-      {{ creating ? 'Creating...' : 'Create task' }}
-    </button>
-  </form>
+  }
+  }
 </div>
 
-<h2 style="margin-top: 1.5rem">Tasks</h2>
-<p class="muted" *ngIf="tasks.length === 0">No tasks yet.</p>
-
-<div class="card" *ngFor="let task of tasks">
-  <div class="row">
-    <div>
-      <h2>{{ task.title }}</h2>
-      <p class="muted">{{ task.description || 'No description' }}</p>
-      <p class="muted" *ngIf="task.assigneeEmail">Assigned to {{ task.assigneeEmail }}</p>
-      <p class="muted">Created by {{ task.creatorEmail }}</p>
-    </div>
-    <div class="actions">
-      <select [ngModel]="task.status" [ngModelOptions]="{ standalone: true }" (ngModelChange)="updateStatus(task, $event)">
-        <option *ngFor="let status of statuses" [value]="status">{{ status }}</option>
-      </select>
-      <button type="button" class="danger" (click)="deleteTask(task.id)">Delete</button>
-    </div>
-  </div>
-</div>
+@if (taskDialog(); as dialog) {
+  <app-task-form
+    [projectId]="id()"
+    [task]="dialog.task"
+    [initialStatus]="dialog.status"
+    (saved)="onTaskSaved($event)"
+    (deleted)="onTaskDeleted($event)"
+    (closed)="taskDialog.set(null)"
+  />
+}
+@if (editingProject() && project()) {
+  <app-project-form [project]="project()" (saved)="onProjectSaved($event)" (closed)="editingProject.set(false)" />
+}

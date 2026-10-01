@@ -1,0 +1,115 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>My tasks</h1>
+      <p class="subtitle">Everything on your plate across every project.</p>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="segmented" role="tablist">
+      <button type="button" role="tab" [class.active]="tab() === 'assigned'" (click)="tab.set('assigned')">
+        <app-icon name="target" [size]="14" /> Assigned to me <span class="count">{{ counts().assigned }}</span>
+      </button>
+      <button type="button" role="tab" [class.active]="tab() === 'created'" (click)="tab.set('created')">
+        <app-icon name="edit" [size]="14" /> Created by me <span class="count">{{ counts().created }}</span>
+      </button>
+    </div>
+    <div class="input-icon search">
+      <app-icon name="search" [size]="16" />
+      <input class="input" type="search" placeholder="Search tasks or projects…" aria-label="Search tasks"
+        [ngModel]="search()" (ngModelChange)="search.set($event)" />
+    </div>
+    <span class="spacer"></span>
+    <label class="toggle">
+      <input type="checkbox" [ngModel]="hideDone()" (ngModelChange)="hideDone.set($event)" />
+      <span class="track"><span class="thumb"></span></span>
+      Hide completed
+    </label>
+  </div>
+
+  @if (error()) {
+    <div class="alert alert-error" role="alert">
+      <app-icon name="alert" [size]="16" /> <span class="spacer">{{ error() }}</span>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="load()">Retry</button>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="card">
+      @for (i of [1, 2, 3, 4]; track i) {
+        <div class="row-skeleton"><div class="skeleton" style="height: 16px; width: 45%"></div><div class="skeleton" style="height: 28px; width: 130px"></div></div>
+      }
+    </div>
+  } @else if (isEmpty()) {
+    <div class="card empty">
+      <span class="empty-icon"><app-icon name="check-circle" /></span>
+      @if (search()) {
+        <h3>No matching tasks</h3>
+        <p>Nothing matches “{{ search() }}”.</p>
+      } @else if (tab() === 'assigned') {
+        <h3>Nothing assigned to you</h3>
+        <p>When a teammate assigns you a task, it shows up here and you'll get a notification.</p>
+      } @else {
+        <h3>You haven't created any tasks</h3>
+        <p>Open a project and add tasks to its board.</p>
+        <a class="btn btn-primary" routerLink="/projects">Go to projects</a>
+      }
+    </div>
+  } @else {
+    @for (group of groups(); track group.status) {
+      @if (group.tasks.length) {
+        <section class="card group">
+          <header class="group-header">
+            <span class="status-dot" [class]="'status-dot ' + group.status"></span>
+            <h2>{{ group.label }}</h2>
+            <span class="muted text-sm">{{ group.tasks.length }}</span>
+          </header>
+          <ul>
+            @for (task of group.tasks; track task.id) {
+              <li class="task-row" [class.done]="task.status === 'DONE'">
+                <button type="button" class="task-main" (click)="selected.set(task)">
+                  <span class="title truncate">{{ task.title }}</span>
+                  <span class="sub muted text-xs">
+                    <app-icon name="folder" [size]="12" />
+                    <span class="truncate">{{ projectName(task) }}</span>
+                    <span>·</span>
+                    <span>updated {{ task.updatedAt | timeAgo }}</span>
+                  </span>
+                </button>
+                <span class="people">
+                  @if (tab() === 'assigned') {
+                    <app-avatar [email]="task.creatorEmail" [size]="24" />
+                    <span class="muted text-xs truncate person">from {{ task.creatorEmail }}</span>
+                  } @else if (task.assigneeEmail) {
+                    <app-avatar [email]="task.assigneeEmail" [size]="24" />
+                    <span class="muted text-xs truncate person">{{ task.assigneeEmail }}</span>
+                  } @else {
+                    <span class="muted text-xs person">Unassigned</span>
+                  }
+                </span>
+                <select class="select status-select" [attr.aria-label]="'Status of ' + task.title"
+                  [ngModel]="task.status" (ngModelChange)="changeStatus(task, $event)">
+                  @for (status of statuses; track status) {
+                    <option [value]="status">{{ labels[status] }}</option>
+                  }
+                </select>
+                @if (ownsProject(task)) {
+                  <a class="btn btn-ghost btn-icon btn-sm" [routerLink]="['/projects', task.projectId]" title="Open board" aria-label="Open project board">
+                    <app-icon name="arrow-right" [size]="16" />
+                  </a>
+                } @else {
+                  <span class="btn-icon btn-sm placeholder"></span>
+                }
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    }
+  }
+</div>
+
+@if (selected(); as task) {
+  <app-task-form [projectId]="task.projectId" [task]="task" (saved)="onSaved($event)" (deleted)="onDeleted($event)" (closed)="selected.set(null)" />
+}
