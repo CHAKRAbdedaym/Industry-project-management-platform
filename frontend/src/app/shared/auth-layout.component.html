@@ -1,0 +1,56 @@
+<div class="auth">
+  <section class="hero" aria-hidden="true">
+    <div class="brand">
+      <span class="logo"><app-icon name="kanban" [size]="20" [strokeWidth]="2.6" /></span>
+      <span>Industry<strong>PM</strong></span>
+    </div>
+
+    <div class="pitch">
+      <h2>Ship industrial projects on time, together.</h2>
+      <p>Plan projects, organise work on a board and keep every stakeholder in the loop — in one place.</p>
+
+      <ul>
+        @for (feature of features; track feature.title) {
+          <li>
+            <span class="feature-icon"><app-icon [name]="feature.icon" [size]="18" /></span>
+            <div>
+              <strong>{{ feature.title }}</strong>
+              <span>{{ feature.text }}</span>
+            </div>
+          </li>
+        }
+      </ul>
+    </div>
+
+    <div class="preview">
+      <div class="preview-col">
+        <span class="preview-title"><i class="status-dot TODO"></i> To do</span>
+        <span class="preview-card w80"></span>
+        <span class="preview-card w60"></span>
+      </div>
+      <div class="preview-col">
+        <span class="preview-title"><i class="status-dot IN_PROGRESS"></i> In progress</span>
+        <span class="preview-card w70"></span>
+      </div>
+      <div class="preview-col">
+        <span class="preview-title"><i class="status-dot DONE"></i> Done</span>
+        <span class="preview-card w90"></span>
+        <span class="preview-card w50"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="form-wrap">
+      <div class="brand mobile-brand">
+        <span class="logo"><app-icon name="kanban" [size]="20" [strokeWidth]="2.6" /></span>
+        <span>Industry<strong>PM</strong></span>
+      </div>
+      <h1>{{ heading() }}</h1>
+      @if (subheading()) {
+        <p class="sub">{{ subheading() }}</p>
+      }
+      <ng-content />
+    </div>
+  </section>
+</div>

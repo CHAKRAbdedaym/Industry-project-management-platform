@@ -1,0 +1,83 @@
+<app-modal [title]="task() ? (isCreator() ? 'Edit task' : 'Task details') : 'New task'" [width]="560" (closed)="closed.emit()">
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    @if (error()) {
+      <div class="alert alert-error" role="alert"><app-icon name="alert" [size]="16" /> {{ error() }}</div>
+    }
+
+    @if (task() && !isCreator()) {
+      <div class="notice">
+        <app-icon name="info" [size]="16" />
+        <span>You're the assignee, so you can move this task between statuses. Only its creator can edit the details.</span>
+      </div>
+    }
+
+    <div class="field">
+      <label for="task-title">Title</label>
+      <input id="task-title" class="input" formControlName="title" placeholder="What needs to be done?" maxlength="255" />
+      @if (form.controls.title.touched && form.controls.title.invalid) {
+        <span class="field-error">Give the task a title.</span>
+      }
+    </div>
+
+    <div class="field">
+      <label for="task-description">Description</label>
+      <textarea
+        id="task-description"
+        class="textarea"
+        formControlName="description"
+        rows="4"
+        maxlength="2000"
+        placeholder="Add context, acceptance criteria, links…"
+      ></textarea>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="task-status">Status</label>
+        <select id="task-status" class="select" formControlName="status">
+          @for (status of statuses; track status) {
+            <option [value]="status">{{ labels[status] }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <div class="label-row">
+          <label for="task-assignee">Assignee</label>
+          @if (isCreator()) {
+            <button type="button" class="link-button" (click)="assignToMe()">Assign to me</button>
+          }
+        </div>
+        <input id="task-assignee" class="input" type="email" formControlName="assigneeEmail" placeholder="teammate@company.com" />
+        @if (form.controls.assigneeEmail.touched && form.controls.assigneeEmail.invalid) {
+          <span class="field-error">Enter a valid email.</span>
+        } @else if (isCreator()) {
+          <span class="hint">They'll get a notification.</span>
+        }
+      </div>
+    </div>
+
+    @if (task(); as t) {
+      <div class="meta">
+        <div class="meta-item">
+          <app-avatar [email]="t.creatorEmail" [size]="22" />
+          <span>Created by <strong>{{ t.creatorEmail }}</strong> · {{ t.createdAt | timeAgo }}</span>
+        </div>
+        <div class="meta-item muted"><app-icon name="clock" [size]="14" /> Updated {{ t.updatedAt | timeAgo }}</div>
+      </div>
+    }
+
+    <div class="actions">
+      @if (task() && isCreator()) {
+        <button type="button" class="btn btn-ghost danger" (click)="remove()"><app-icon name="trash" [size]="16" /> Delete</button>
+      }
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-secondary" (click)="closed.emit()">Cancel</button>
+      <button type="submit" class="btn btn-primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span>
+        }
+        {{ task() ? 'Save changes' : 'Create task' }}
+      </button>
+    </div>
+  </form>
+</app-modal>
