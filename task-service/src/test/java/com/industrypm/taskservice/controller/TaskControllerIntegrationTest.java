@@ -117,7 +117,7 @@ class TaskControllerIntegrationTest {
     }
 
     @Test
-    void assigneeCanViewButNotMutateTask() throws Exception {
+    void assigneeCanMoveStatusButNotEditOrDeleteTask() throws Exception {
         String creator = "creator2@example.com";
         String assignee = "assignee2@example.com";
         UUID projectId = UUID.randomUUID();
@@ -128,12 +128,21 @@ class TaskControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.assigneeEmail", is(assignee)));
 
-        UpdateTaskRequest update = new UpdateTaskRequest("Hacked title", null, "DONE", null);
+        UpdateTaskRequest hijack = new UpdateTaskRequest("Hacked title", "Details", "DONE", assignee);
         mockMvc.perform(put("/api/tasks/" + taskId)
                         .header("Authorization", "Bearer " + mintToken(assignee))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(update)))
-                .andExpect(status().isNotFound());
+                        .content(objectMapper.writeValueAsString(hijack)))
+                .andExpect(status().isBadRequest());
+
+        UpdateTaskRequest statusOnly = new UpdateTaskRequest("Do the thing", "Details", "IN_PROGRESS", assignee);
+        mockMvc.perform(put("/api/tasks/" + taskId)
+                        .header("Authorization", "Bearer " + mintToken(assignee))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(statusOnly)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("IN_PROGRESS")))
+                .andExpect(jsonPath("$.title", is("Do the thing")));
 
         mockMvc.perform(delete("/api/tasks/" + taskId).header("Authorization", "Bearer " + mintToken(assignee)))
                 .andExpect(status().isNotFound());

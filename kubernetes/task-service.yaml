@@ -50,6 +50,11 @@ spec:
                 secretKeyRef:
                   name: industry-platform-secrets
                   key: JWT_SECRET
+            - name: NOTIFICATION_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: industry-platform-config
+                  key: NOTIFICATION_SERVICE_URL
           # No Spring Actuator on this service - TCP check on the app port (see
           # auth-service.yaml for the rationale).
           readinessProbe:
