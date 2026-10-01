@@ -152,8 +152,8 @@ class TaskControllerIntegrationTest {
     }
 
     @Test
-    void requestsWithoutTokenAreForbidden() throws Exception {
-        mockMvc.perform(get("/api/tasks")).andExpect(status().isForbidden());
+    void requestsWithoutTokenAreUnauthorized() throws Exception {
+        mockMvc.perform(get("/api/tasks")).andExpect(status().isUnauthorized());
     }
 
     @Test
